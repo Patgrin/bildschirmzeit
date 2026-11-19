@@ -33,6 +33,20 @@ export function weekdayIndex(s) {
   return (parseYmd(s).getDay() + 6) % 7;
 }
 
+// Family-Safety-Berichte laufen immer von Donnerstag bis Mittwoch → danach werden Wochen gebildet
+export const WEEK_START = 3; // Mo=0 … Do=3
+
+/** Donnerstag der Berichtswoche, in die der Tag fällt */
+export function weekStartOf(s) {
+  return addDays(s, -((weekdayIndex(s) - WEEK_START + 7) % 7));
+}
+
+/** "Do 12. Nov. – Mi 18. Nov. 2026" */
+export function fmtWeek(start) {
+  const end = addDays(start, 6);
+  return `${WD_SHORT[weekdayIndex(start)]} ${fmtDate(start)} – ${WD_SHORT[weekdayIndex(end)]} ${fmtDate(end, true)}`;
+}
+
 export function isoWeek(s) {
   const d = parseYmd(s);
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));

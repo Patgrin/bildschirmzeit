@@ -161,6 +161,12 @@ export function parseReport(text, received) {
     return { weekStart: range.from, weekEnd: range.to, rangeFromText: range.fromText, days, kind: 'daily', total: total ?? Object.values(days).reduce((a, b) => a + b, 0), avg };
   }
   const len = daysBetween(range.from, range.to) + 1;
+  if (total === 0) {
+    // Wochensumme 0 → jeder Tag ist tatsächlich 0, nichts schätzen
+    const d = {};
+    for (let x = range.from; x <= range.to; x = addDays(x, 1)) d[x] = 0;
+    return { weekStart: range.from, weekEnd: range.to, rangeFromText: range.fromText, days: d, kind: 'daily', total: 0, avg: 0 };
+  }
   const est = avg ?? (total != null ? total / len : null);
   if (est != null) {
     const d = {};

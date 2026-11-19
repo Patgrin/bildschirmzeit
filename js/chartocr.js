@@ -159,6 +159,8 @@ export function parseChartWords(words, range, total = null) {
   const missing = dates.filter((d) => days[d] == null);
   const sum = Object.values(days).reduce((a, b) => a + b, 0);
   if (missing.length === 1 && total != null && total - sum >= 0 && total - sum <= 1440) days[missing[0]] = total - sum;
+  // Ergeben die gelesenen Tage bereits die Wochensumme, sind alle übrigen Tage 0 ("0 Min." wird gern übersehen)
+  else if (missing.length > 1 && total != null && sum === total && dates.length - missing.length >= 1) missing.forEach((d) => (days[d] = 0));
 
   const n = Object.keys(days).length;
   const sum2 = Object.values(days).reduce((a, b) => a + b, 0);

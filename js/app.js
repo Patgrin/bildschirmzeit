@@ -5,9 +5,9 @@ import { parseReport } from './parser.js';
 import { ocrImage, parseChartWords } from './chartocr.js';
 import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
-import { ymd, addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
+import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -50,7 +50,8 @@ async function sync({ silent = false } = {}) {
   setStatus('Prüfe Outlook auf neue Berichte …');
   try {
     // Überlappend ab 14 Tage vor der letzten Mail abfragen – Duplikate werden ohnehin erkannt
-    // Nach einer verbesserten Erkennung alle Mails erneut durchsehen, sonst nur die letzten Wochen
+    // Geänderte Auswertung → alle aus Mails stammenden Werte verwerfen und komplett neu berechnen (manuelle bleiben)
+    if (db.parserVersion !== PARSER_VERSION) resetMailData();
     const since = db.lastReceived && db.parserVersion === PARSER_VERSION ? new Date(new Date(db.lastReceived).getTime() - 14 * 86400000).toISOString() : FIRST_SYNC_FROM;
     const msgs = await graph.listMessages(token, cfg().folderId, since);
     let neu = 0, dup = 0, unk = 0, other = 0, retried = 0;
@@ -161,9 +162,9 @@ function renderTimeline() {
     el.innerHTML = `<div class="empty"><p>Noch keine Einträge.</p><p class="muted">${hint}</p></div>`;
     return;
   }
-  const first = mondayOf(keys[0]);
+  const first = weekStartOf(keys[0]);
   const lastKey = keys[keys.length - 1] > ymd(new Date()) ? keys[keys.length - 1] : ymd(new Date());
-  const last = mondayOf(lastKey);
+  const last = weekStartOf(lastKey);
   const custom = cfg().customFree;
   const maxMin = Math.max(240, ...keys.map((k) => db.days[k].min));
 
@@ -172,13 +173,13 @@ function renderTimeline() {
     const days = [...Array(7)].map((_, i) => addDays(w, i));
     const vals = days.map((d) => db.days[d]).filter(Boolean);
     if (!vals.length && w !== last) {
-      html += `<div class="week gap">KW ${isoWeek(w)} · keine Daten</div>`;
+      html += `<div class="week gap">${fmtWeek(w)} · kein Bericht</div>`;
       continue;
     }
     const sum = vals.reduce((a, v) => a + v.min, 0);
     const holidays = [...new Set(days.map((d) => holidayFor(d, custom)).filter(Boolean))];
     html += `<section class="week">
-      <header><div><h3>KW ${isoWeek(w)}</h3><span class="muted">${fmtDate(w)} – ${fmtDate(addDays(w, 6), true)}</span></div>
+      <header><div><h3>${fmtWeek(w)}</h3></div>
       <div class="wsum"><strong>${fmtHM(sum)} h</strong><span class="muted">Ø ${vals.length ? fmtMin(sum / vals.length) : '–'}</span></div></header>
       ${holidays.length ? `<div class="chips">${holidays.map((h) => `<span class="chip hol">${escapeHtml(h)}</span>`).join('')}</div>` : ''}
       <ul>`;
@@ -186,7 +187,7 @@ function renderTimeline() {
       const v = db.days[d];
       const hol = holidayFor(d, custom);
       const we = weekdayIndex(d) >= 5;
-      const pct = v ? Math.max(1.5, (v.min / maxMin) * 100) : 0;
+      const pct = v && v.min > 0 ? Math.max(1.5, (v.min / maxMin) * 100) : 0;
       const tag = v?.src === 'estimate' ? '<span class="tag" title="Aus Wochendurchschnitt geschätzt">≈</span>' : v?.src === 'manual' ? '<span class="tag" title="Manuell eingetragen">✎</span>' : '';
       html += `<li class="day${hol ? ' is-hol' : ''}${we ? ' is-we' : ''}" data-day="${d}">
         <span class="dname">${WD_SHORT[weekdayIndex(d)]}<small>${fmtDate(d)}</small></span>

@@ -2,7 +2,7 @@
 // Die Zeit über dem November-2025-Niveau ist transparent orange hervorgehoben,
 // Ferienzeiten liegen als graue Bänder im Hintergrund.
 
-import { addDays, mondayOf, daysBetween, fmtDate, fmtMin, fmtHM, isoWeek, MONTHS, MONTHS_LONG, escapeHtml, weekdayIndex } from './util.js';
+import { addDays, weekStartOf, fmtWeek, daysBetween, fmtDate, fmtMin, fmtHM, MONTHS, MONTHS_LONG, escapeHtml, weekdayIndex } from './util.js';
 import { holidayFor, holidaysOO } from './holidays.js';
 
 export const BASE_FROM = '2025-11-01';
@@ -11,7 +11,7 @@ export const BASE_TO = '2025-11-30';
 export function weeklySeries(days, customFree) {
   const weeks = new Map();
   for (const [d, v] of Object.entries(days)) {
-    const w = mondayOf(d);
+    const w = weekStartOf(d);
     if (!weeks.has(w)) weeks.set(w, { start: w, sum: 0, n: 0, estimated: false });
     const o = weeks.get(w);
     o.sum += v.min;
@@ -22,8 +22,10 @@ export function weeklySeries(days, customFree) {
   for (const w of out) {
     w.avg = w.sum / w.n;
     let free = 0, name = null;
-    for (let i = 0; i < 5; i++) {
-      const h = holidayFor(addDays(w.start, i), customFree);
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(w.start, i);
+      if (weekdayIndex(day) >= 5) continue; // nur Schultage Mo–Fr zählen
+      const h = holidayFor(day, customFree);
       if (h) { free++; name = name || h; }
     }
     w.holiday = free >= 3 ? name : null;
@@ -172,7 +174,7 @@ export function renderChart(el, tip, st, customFree = []) {
     cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
     focus.setAttribute('cx', cx); focus.setAttribute('cy', cy);
     const diff = st.nov != null ? w.avg - st.nov : null;
-    tip.innerHTML = `<strong>KW ${isoWeek(w.start)} · ${fmtDate(w.start)} – ${fmtDate(addDays(w.start, 6), true)}</strong>
+    tip.innerHTML = `<strong>${fmtWeek(w.start)}</strong>
       <div>Ø ${fmtMin(w.avg)} pro Tag</div>
       ${diff != null ? `<div>${signed(diff)} ggü. Nov. 2025 (${diff >= 0 ? '+' : '−'}${Math.abs(Math.round((diff / st.nov) * 100))} %)</div>` : ''}
       <div class="muted">Woche gesamt ${fmtHM(w.sum)} h · ${w.n} Tage${w.estimated ? ' · teils geschätzt' : ''}</div>
