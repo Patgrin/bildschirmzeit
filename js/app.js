@@ -7,7 +7,7 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.6.1';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -163,8 +163,10 @@ function renderTimeline() {
     return;
   }
   const wts = Object.keys(db.weekTotals || {}).sort();
-  const first = weekStartOf(wts.length && wts[0] < keys[0] ? wts[0] : keys[0]);
-  const lastKey = keys[keys.length - 1] > ymd(new Date()) ? keys[keys.length - 1] : ymd(new Date());
+  // Frühester Tag aus Tageswerten oder Wochensummen (eine der beiden Listen kann leer sein)
+  const firstDay = [keys[0], wts[0]].filter(Boolean).sort()[0];
+  const first = weekStartOf(firstDay);
+  const lastKey = keys.length && keys[keys.length - 1] > ymd(new Date()) ? keys[keys.length - 1] : ymd(new Date());
   const last = weekStartOf(lastKey);
   const custom = cfg().customFree;
   const maxMin = Math.max(240, ...keys.map((k) => db.days[k].min));
