@@ -5,10 +5,10 @@ import { parseReport } from './parser.js';
 import { ocrImage, parseChartWords } from './chartocr.js';
 import { daysFromChartUrls } from './chartdata.js';
 import { holidayFor } from './holidays.js';
-import { stats, renderChart } from './chart.js';
+import { stats, renderChart, resetZoom } from './chart.js';
 import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.7.0';
+export const APP_VERSION = '1.8.0';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -247,7 +247,7 @@ function renderStats() {
     ['Wochenende', st.wochenende != null ? fmtHM(st.wochenende) + ' h' : '–', 'Ø Sa/So außerhalb Ferien'],
   ];
   $('#tiles').innerHTML = tiles.map(([l, v, s]) => `<div class="tile"><span class="tl">${l}</span><span class="tv">${v}</span><span class="ts">${s}</span></div>`).join('');
-  renderChart($('#chart'), $('#tip'), st, cfg().customFree || []);
+  renderChart($('#chart'), $('#tip'), st, cfg().customFree || [], (zoomed) => ($('#zoomReset').hidden = !zoomed));
   $('#monthTable tbody').innerHTML = st.monthRows.map((r) => `<tr><td>${r.label}</td><td>${fmtHM(r.avg)}</td><td>${r.schule != null ? fmtHM(r.schule) : '–'}</td><td>${r.ferien != null ? fmtHM(r.ferien) : '–'}</td><td>${r.n}</td></tr>`).join('');
 }
 
@@ -382,6 +382,7 @@ async function init() {
   document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
   $('#timeline').onclick = (e) => { const li = e.target.closest('.day'); if (li) editDay(li.dataset.day); };
   $('#syncBtn').onclick = () => sync();
+  $('#zoomReset').onclick = () => resetZoom();
   bindSettings();
   let lastW = innerWidth;
   // iOS meldet beim Scrollen 'resize' (Höhe ändert sich) – nur bei geänderter Breite neu zeichnen

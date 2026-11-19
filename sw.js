@@ -3,7 +3,7 @@
 // offline wird die zuletzt geladene Version aus dem Cache verwendet.
 // Bei Änderungen an der App reicht es, die Dateien neu hochzuladen – VERSION erhöhen räumt alte Caches auf.
 
-const VERSION = 'bz-1.7.0';
+const VERSION = 'bz-1.8.0';
 const ASSETS = [
   './', './index.html', './style.css', './manifest.webmanifest',
   './js/app.js', './js/auth.js', './js/graph.js', './js/parser.js', './js/holidays.js', './js/store.js', './js/chart.js', './js/util.js', './js/chartocr.js', './js/chartdata.js',

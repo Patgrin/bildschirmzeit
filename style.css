@@ -125,6 +125,7 @@ label { display: block; font-size: 14px; color: var(--text-2); }
 
 /* Diagramm */
 .chart-wrap { position: relative; }
+#chart { touch-action: pan-y; }
 #chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
 #chart .grid { stroke: var(--grid); stroke-width: 1; }
 #chart .axis { fill: var(--muted); font-size: 11px; }
@@ -141,6 +142,8 @@ label { display: block; font-size: 14px; color: var(--text-2); }
 #chart .base-label { fill: var(--text-2); font-size: 11px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 #chart .hit { fill: transparent; }
 .sub { margin: -6px 0 8px; }
+.zoom-reset { display: block; margin: 8px auto 0; font-size: 14px; padding: 6px 12px; }
+.zoom-reset[hidden] { display: none; }
 .sw-line { height: 0; width: 14px; border-top: 2px solid var(--school); border-radius: 0; vertical-align: 3px; }
 .sw-excess { background: color-mix(in srgb, var(--hol) 45%, transparent); }
 .sw-base { width: 14px; height: 0; border-top: 2px dashed var(--text-2); border-radius: 0; vertical-align: 3px; }
