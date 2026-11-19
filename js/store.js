@@ -11,7 +11,7 @@ import { hash } from './util.js';
 const KEY = 'bz.data.v1';
 const PRIO = { estimate: 1, mail: 2, manual: 3 };
 // Bei Verbesserungen der Erkennung erhöhen: Nicht (vollständig) erkannte Mails werden dann automatisch neu gelesen
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 3; // 3: kompletten Ordner ohne Datumsgrenze einlesen
 const RETRY = ['nicht erkannt', 'nur Summe', 'anderes Familienmitglied'];
 
 /** Mail wurde mit älterer Erkennung nicht vollständig gelesen → vergessen, damit sie neu verarbeitet wird */

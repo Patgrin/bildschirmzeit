@@ -80,6 +80,7 @@ export function stats(days, customFree) {
   };
 }
 
+let hideActive = null, outsideBound = false;
 const signed = (min) => `${min >= 0 ? '+' : '−'}${fmtHM(Math.abs(min))} h`;
 
 export function renderChart(el, tip, st, customFree = []) {
@@ -183,5 +184,11 @@ export function renderChart(el, tip, st, customFree = []) {
   };
   el.onpointermove = show;
   el.onpointerdown = show;
+  hideActive = hide;
+  if (!outsideBound) {
+    // Tippen außerhalb des Diagramms blendet die Details wieder aus
+    outsideBound = true;
+    document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#chart')) hideActive?.(); });
+  }
   el.onpointerleave = (e) => { if (e.pointerType === 'mouse') hide(); };
 }

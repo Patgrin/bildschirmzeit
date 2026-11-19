@@ -7,8 +7,8 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.3.0';
-const FIRST_SYNC_FROM = '2025-10-01T00:00:00Z';
+export const APP_VERSION = '1.4.0';
+const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
 const $ = (s) => document.querySelector(s);
@@ -246,6 +246,10 @@ function renderSettings() {
 
   const proc = Object.entries(db.processed).sort((a, b) => ((a[1].received || '') < (b[1].received || '') ? 1 : -1));
   $('#mailCount').textContent = proc.length;
+  const weeksOk = proc.filter(([, p]) => p.weekStart && (p.status === 'übernommen' || p.status === 'nur Summe')).map(([, p]) => p.weekStart).sort();
+  $('#mailRange').innerHTML = weeksOk.length
+    ? `<strong>${weeksOk.length} Wochenberichte</strong> von ${fmtDate(weeksOk[0], true)} bis ${fmtDate(addDays(weeksOk[weeksOk.length - 1], 6), true)}`
+    : '';
   $('#mailLog').innerHTML = proc.slice(0, 60).map(([k, p]) => `<li><span class="st st-${p.status === 'übernommen' ? 'ok' : p.status === 'nicht erkannt' ? 'err' : 'mute'}">${escapeHtml(p.status)}</span>
     ${escapeHtml(p.subject || '(ohne Betreff)')}<br><small class="muted">${p.received ? new Date(p.received).toLocaleDateString('de-AT') : ''}${p.weekStart ? ` · Woche ${fmtDate(p.weekStart)}–${fmtDate(p.weekEnd)}` : ''}${p.kind && p.kind !== 'daily' && p.kind !== 'none' ? ' · nur Durchschnitt' : ''}</small>
     ${db.rawSamples[k] ? `<details><summary>Rohtext anzeigen</summary><button class="copy" data-copy="${escapeHtml(k)}">Text kopieren</button><pre>${escapeHtml(db.rawSamples[k])}</pre></details>` : ''}</li>`).join('');
