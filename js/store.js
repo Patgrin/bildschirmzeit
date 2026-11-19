@@ -4,14 +4,15 @@
 //  1. Jede E-Mail (internetMessageId) wird nur einmal verarbeitet.
 //  2. Inhaltlich identische Berichte (z. B. weitergeleitete Kopien) werden über einen Hash erkannt.
 //  3. Jeder Tag existiert genau einmal. Ein vorhandener Wert wird nur durch eine "bessere"
-//     Quelle ersetzt: manuell > Tageswert aus Mail > geschätzt (Durchschnitt).
+//     Quelle ersetzt: manuell > Tageswert aus Mail.
+// Es wird nichts geschätzt: Ist das Diagramm nicht lesbar, wird nur die Wochensumme gespeichert (weekTotals).
 
 import { hash } from './util.js';
 
 const KEY = 'bz.data.v1';
 const PRIO = { estimate: 1, mail: 2, manual: 3 };
 // Bei Verbesserungen der Erkennung erhöhen: Nicht (vollständig) erkannte Mails werden dann automatisch neu gelesen
-export const PARSER_VERSION = 4; // 4: 0-Werte nicht schätzen, alles neu berechnen
+export const PARSER_VERSION = 5; // 5: keine Schätzungen mehr, nur echte Werte
 const RETRY = ['nicht erkannt', 'nur Summe', 'anderes Familienmitglied'];
 
 /** Mail wurde mit älterer Erkennung nicht vollständig gelesen → vergessen, damit sie neu verarbeitet wird */
@@ -29,6 +30,7 @@ const empty = () => ({
   processed: {},   // msgKey -> { subject, received, status, weekStart, weekEnd, kind }
   hashes: {},      // inhaltsHash -> msgKey
   days: {},        // 'YYYY-MM-DD' -> { min, src, msg }
+  weekTotals: {},  // Berichtsbeginn (Do) -> { total, end, msg } – nur wenn Tageswerte nicht lesbar waren
   lastSync: null,
   lastReceived: null,
   rawSamples: {},  // msgKey -> Text (nur für nicht erkannte Mails, zur Fehlersuche)
@@ -74,8 +76,14 @@ export function ingest(key, meta, report, rawText) {
   }
   db.hashes[h] = key;
 
-  if (report.kind !== 'daily') db.rawSamples[key] = rawText.slice(0, 8000); // zur Fehlersuche aufheben
-  const src = report.kind === 'daily' ? 'mail' : 'estimate';
+  if (report.kind !== 'daily') {
+    // Keine Tageswerte lesbar → nichts schätzen, nur die echte Wochensumme merken
+    db.rawSamples[key] = rawText.slice(0, 8000); // zur Fehlersuche aufheben
+    if (report.total != null) db.weekTotals[report.weekStart] = { total: Math.round(report.total), end: report.weekEnd, msg: key };
+    db.processed[key] = { ...base, status: 'nur Summe', changed: 0, h };
+    return { status: 'neu', changed: 0 };
+  }
+  const src = 'mail';
   let changed = 0;
   for (const [day, min] of Object.entries(report.days)) {
     const cur = db.days[day];
@@ -102,6 +110,7 @@ export function resetMailData() {
   for (const [d, v] of Object.entries(db.days)) if (v.src !== 'manual') delete db.days[d];
   db.processed = {};
   db.hashes = {};
+  db.weekTotals = {};
   db.rawSamples = {};
   db.lastReceived = null;
   save();
@@ -121,6 +130,7 @@ export function importJson(str) {
   }
   Object.assign(db.processed, d.processed || {});
   Object.assign(db.hashes, d.hashes || {});
+  for (const [w, t] of Object.entries(d.weekTotals || {})) if (!db.weekTotals[w]) db.weekTotals[w] = t;
   if (!db.settings.clientId && d.settings) db.settings = { ...db.settings, ...d.settings };
   save();
 }

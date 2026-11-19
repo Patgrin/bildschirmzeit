@@ -43,12 +43,12 @@ Im Code stehen keine persönlichen Daten. Client-ID, Zugangsdaten und Bildschirm
   App erneuert sie dann selbst mit einem kurzen Umweg über die Microsoft-Seite, normalerweise ohne Eingabe.
 - **Duplikate:** Jede Mail wird nur einmal verarbeitet (Message-ID), inhaltlich gleiche Berichte
   (z. B. weitergeleitete Kopien) werden erkannt und jeder Tag existiert nur einmal. Vorrang hat
-  manuell > Tageswert aus Mail > geschätzter Wert.
+  manuell > Tageswert aus Mail.
 - **Ferien OÖ:** Sommer-, Herbst-, Weihnachts-, Semester- (3. Februarwoche), Oster- und Pfingstferien
   sowie 8.12., 1.5., 4.5. (Hl. Florian), Christi Himmelfahrt und Fronleichnam werden nach dem
   Schulzeitgesetz für jedes Jahr berechnet. Schulautonome Tage in den Einstellungen ergänzen.
-- **Fehlende Tageswerte:** Enthält eine Mail nur Summe/Durchschnitt der Woche, werden die Tage
-  geschätzt (≈) und später durch genauere Werte ersetzt. Jeden Tag kannst du antippen und korrigieren.
+- **Nur echte Werte:** Es wird nichts geschätzt. Lassen sich die Tageswerte im Diagramm nicht lesen,
+  zeigt die Timeline „–“ und nur die Wochensumme laut Bericht. Jeden Tag kannst du antippen und selbst eintragen.
 - **Updates:** Neue Versionen einfach erneut ins Repository hochladen. Die App lädt beim nächsten
   Öffnen automatisch die neue Version (Service Worker „Netzwerk zuerst“). Offline zeigt sie die zuletzt
   geladenen Daten.

@@ -8,15 +8,18 @@ import { holidayFor, holidaysOO } from './holidays.js';
 export const BASE_FROM = '2025-11-01';
 export const BASE_TO = '2025-11-30';
 
-export function weeklySeries(days, customFree) {
+export function weeklySeries(days, customFree, weekTotals = {}) {
   const weeks = new Map();
   for (const [d, v] of Object.entries(days)) {
     const w = weekStartOf(d);
-    if (!weeks.has(w)) weeks.set(w, { start: w, sum: 0, n: 0, estimated: false });
+    if (!weeks.has(w)) weeks.set(w, { start: w, sum: 0, n: 0 });
     const o = weeks.get(w);
     o.sum += v.min;
     o.n++;
-    if (v.src === 'estimate') o.estimated = true;
+  }
+  // Wochen, von denen nur die echte Wochensumme bekannt ist (Diagramm nicht lesbar)
+  for (const [w, t] of Object.entries(weekTotals)) {
+    if (!weeks.has(w)) weeks.set(w, { start: w, sum: t.total, n: 7, totalOnly: true });
   }
   const out = [...weeks.values()].sort((a, b) => (a.start < b.start ? -1 : 1));
   for (const w of out) {
@@ -45,8 +48,8 @@ function regression(ys) {
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 
-export function stats(days, customFree) {
-  const weeks = weeklySeries(days, customFree);
+export function stats(days, customFree, weekTotals = {}) {
+  const weeks = weeklySeries(days, customFree, weekTotals);
   const nov = mean(Object.entries(days).filter(([d]) => d >= BASE_FROM && d <= BASE_TO).map(([, v]) => v.min));
   const last = weeks.slice(-4);
   const recent = last.length ? last.reduce((a, w) => a + w.sum, 0) / last.reduce((a, w) => a + w.n, 0) : null;
@@ -154,7 +157,7 @@ export function renderChart(el, tip, st, customFree = []) {
     svg += `<text class="base-label" text-anchor="end" x="${W - m.r - 4}" y="${Math.min(yb + 15, m.t + ih - 4)}">Ø Nov. 2025: ${fmtHM(st.nov)} h</text>`;
   }
   svg += `<path class="line" d="${line}"/>`;
-  pts.forEach((p, i) => (svg += `<circle class="dot${weeks[i].estimated ? ' est' : ''}" cx="${p[0]}" cy="${p[1]}" r="${weeks.length > 40 ? 2.5 : 3.5}"/>`));
+  pts.forEach((p, i) => (svg += `<circle class="dot${weeks[i].totalOnly ? ' est' : ''}" cx="${p[0]}" cy="${p[1]}" r="${weeks.length > 40 ? 2.5 : 3.5}"/>`));
   svg += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" visibility="hidden"/>`;
   svg += `<circle class="focus" r="5.5" cx="-10" cy="-10"/>`;
   svg += `<rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}"/>`;
@@ -177,7 +180,7 @@ export function renderChart(el, tip, st, customFree = []) {
     tip.innerHTML = `<strong>${fmtWeek(w.start)}</strong>
       <div>Ø ${fmtMin(w.avg)} pro Tag</div>
       ${diff != null ? `<div>${signed(diff)} ggü. Nov. 2025 (${diff >= 0 ? '+' : '−'}${Math.abs(Math.round((diff / st.nov) * 100))} %)</div>` : ''}
-      <div class="muted">Woche gesamt ${fmtHM(w.sum)} h · ${w.n} Tage${w.estimated ? ' · teils geschätzt' : ''}</div>
+      <div class="muted">Woche gesamt ${fmtHM(w.sum)} h · ${w.totalOnly ? 'nur Wochensumme laut Bericht' : `${w.n} Tage`}</div>
       ${w.holiday ? `<div class="muted">${escapeHtml(w.holiday)}</div>` : ''}`;
     tip.hidden = false;
     const sx = (cx / W) * box.width, sy = (cy / Hh) * box.height;

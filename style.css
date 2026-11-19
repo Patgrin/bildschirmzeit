@@ -181,3 +181,4 @@ nav button.on { color: var(--accent); }
 .toast.show { opacity: 1; transform: none; }
 .toast.err { background: var(--err); color: #fff; }
 .toast.ok { background: var(--ok); color: #fff; }
+.wnote { margin: 0 0 6px; }

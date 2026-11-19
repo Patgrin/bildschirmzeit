@@ -7,7 +7,7 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.6.0';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -152,7 +152,7 @@ function maybeAutoSync() {
 function renderTimeline() {
   const el = $('#timeline');
   const keys = Object.keys(db.days).sort();
-  if (!keys.length) {
+  if (!keys.length && !Object.keys(db.weekTotals || {}).length) {
     const r = db.lastResult;
     const hint = !cfg().folderId || !auth.hadSession()
       ? 'Verbinde Outlook in den Einstellungen – die Wochenberichte werden dann automatisch eingetragen.'
@@ -162,7 +162,8 @@ function renderTimeline() {
     el.innerHTML = `<div class="empty"><p>Noch keine Einträge.</p><p class="muted">${hint}</p></div>`;
     return;
   }
-  const first = weekStartOf(keys[0]);
+  const wts = Object.keys(db.weekTotals || {}).sort();
+  const first = weekStartOf(wts.length && wts[0] < keys[0] ? wts[0] : keys[0]);
   const lastKey = keys[keys.length - 1] > ymd(new Date()) ? keys[keys.length - 1] : ymd(new Date());
   const last = weekStartOf(lastKey);
   const custom = cfg().customFree;
@@ -172,15 +173,18 @@ function renderTimeline() {
   for (let w = last; w >= first; w = addDays(w, -7)) {
     const days = [...Array(7)].map((_, i) => addDays(w, i));
     const vals = days.map((d) => db.days[d]).filter(Boolean);
-    if (!vals.length && w !== last) {
+    const wt = db.weekTotals?.[w];
+    if (!vals.length && !wt && w !== last) {
       html += `<div class="week gap">${fmtWeek(w)} · kein Bericht</div>`;
       continue;
     }
-    const sum = vals.reduce((a, v) => a + v.min, 0);
+    const sum = wt && !vals.length ? wt.total : vals.reduce((a, v) => a + v.min, 0);
+    const avgTxt = wt && !vals.length ? fmtMin(wt.total / 7) : vals.length ? fmtMin(sum / vals.length) : '–';
     const holidays = [...new Set(days.map((d) => holidayFor(d, custom)).filter(Boolean))];
     html += `<section class="week">
       <header><div><h3>${fmtWeek(w)}</h3></div>
-      <div class="wsum"><strong>${fmtHM(sum)} h</strong><span class="muted">Ø ${vals.length ? fmtMin(sum / vals.length) : '–'}</span></div></header>
+      <div class="wsum"><strong>${fmtHM(sum)} h</strong><span class="muted">Ø ${avgTxt}</span></div></header>
+      ${wt && !vals.length ? '<p class="small muted wnote">Nur Wochensumme laut Bericht – die Tageswerte im Diagramm waren nicht lesbar.</p>' : ''}
       ${holidays.length ? `<div class="chips">${holidays.map((h) => `<span class="chip hol">${escapeHtml(h)}</span>`).join('')}</div>` : ''}
       <ul>`;
     for (const d of days) {
@@ -188,10 +192,10 @@ function renderTimeline() {
       const hol = holidayFor(d, custom);
       const we = weekdayIndex(d) >= 5;
       const pct = v && v.min > 0 ? Math.max(1.5, (v.min / maxMin) * 100) : 0;
-      const tag = v?.src === 'estimate' ? '<span class="tag" title="Aus Wochendurchschnitt geschätzt">≈</span>' : v?.src === 'manual' ? '<span class="tag" title="Manuell eingetragen">✎</span>' : '';
+      const tag = v?.src === 'manual' ? '<span class="tag" title="Manuell eingetragen">✎</span>' : '';
       html += `<li class="day${hol ? ' is-hol' : ''}${we ? ' is-we' : ''}" data-day="${d}">
         <span class="dname">${WD_SHORT[weekdayIndex(d)]}<small>${fmtDate(d)}</small></span>
-        <span class="track"><span class="fill${hol ? ' hol' : ''}${v?.src === 'estimate' ? ' est' : ''}" style="width:${pct}%"></span></span>
+        <span class="track"><span class="fill${hol ? ' hol' : ''}" style="width:${pct}%"></span></span>
         <span class="val">${v ? fmtHM(v.min) : '–'}${tag}</span>
       </li>`;
     }
@@ -217,7 +221,7 @@ function pct(x) {
 }
 
 function renderStats() {
-  const st = stats(db.days, cfg().customFree);
+  const st = stats(db.days, cfg().customFree, db.weekTotals || {});
   const tiles = [
     ['Seit November 2025', st.change != null ? pct(st.change) : '–', st.nov != null ? `Nov.: Ø ${fmtMin(st.nov)} → zuletzt Ø ${fmtMin(st.recent)} / Tag` : 'Noch keine Daten aus November'],
     ['Trend', st.slopePerWeek != null ? `${st.slopePerWeek >= 0 ? '+' : '−'}${Math.abs(Math.round(st.slopePerWeek))} Min.` : '–', 'pro Tag, je Woche'],
