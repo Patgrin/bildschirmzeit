@@ -61,6 +61,7 @@ export function ingest(key, meta, report, rawText) {
   }
   db.hashes[h] = key;
 
+  if (report.kind !== 'daily') db.rawSamples[key] = rawText.slice(0, 8000); // zur Fehlersuche aufheben
   const src = report.kind === 'daily' ? 'mail' : 'estimate';
   let changed = 0;
   for (const [day, min] of Object.entries(report.days)) {
@@ -70,7 +71,7 @@ export function ingest(key, meta, report, rawText) {
       changed++;
     }
   }
-  db.processed[key] = { ...base, status: 'übernommen', changed };
+  db.processed[key] = { ...base, status: report.kind === 'daily' ? 'übernommen' : 'nur Summe', changed, ocr: !!report.ocr };
   return { status: 'neu', changed };
 }
 

@@ -154,7 +154,7 @@ export function parseReport(text, received) {
   const range = findWeekRange(text, received);
   const days = findDaily(text, range);
   const avg = findLabeled(text, 'durchschnitt|täglich|pro tag|daily average|average|per day|avg');
-  const total = findLabeled(text, 'gesamte bildschirmzeit|bildschirmzeit gesamt|insgesamt|gesamt|total screen time|total|bildschirmzeit|screen time');
+  const total = findLabeled(text, 'computerzeit|gerätezeit|konsolenzeit|xbox-zeit|gesamte bildschirmzeit|bildschirmzeit gesamt|insgesamt|gesamt|total screen time|total|bildschirmzeit|screen time');
 
   const n = Object.keys(days).length;
   if (n >= 3) {

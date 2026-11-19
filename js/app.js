@@ -2,11 +2,12 @@ import { db, save, ingest, msgKey, setManual, resetMailData, exportJson, importJ
 import * as auth from './auth.js';
 import * as graph from './graph.js';
 import { parseReport } from './parser.js';
+import { ocrImage, parseChartWords } from './chartocr.js';
 import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.1.0';
 const FIRST_SYNC_FROM = '2025-10-01T00:00:00Z';
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -65,7 +66,13 @@ async function sync({ silent = false } = {}) {
         continue;
       }
       const rep = parseReport(full, new Date(m.receivedDateTime));
-      const r = ingest(key, { subject: m.subject, received: m.receivedDateTime }, rep, full);
+      let diag = '';
+      if (rep.kind !== 'daily' && m.body?.contentType === 'html') {
+        // Tageswerte stehen nur im Diagramm-Bild → per Texterkennung auslesen
+        setStatus(`Lese Diagramm: ${escapeHtml(m.subject || '')} …`);
+        diag = await readChart(token, m, rep);
+      }
+      const r = ingest(key, { subject: m.subject, received: m.receivedDateTime }, rep, `${full}\n\n--- Diagnose ---\n${diag}`);
       if (r.status === 'neu') neu++;
       else if (r.status === 'leer') unk++;
       else dup++;
@@ -88,6 +95,40 @@ async function sync({ silent = false } = {}) {
     document.body.classList.remove('syncing');
     renderStatus();
   }
+}
+
+/** Versucht die Tageswerte aus dem Diagramm-Bild zu lesen; ergänzt rep bei Erfolg. Liefert Diagnosetext. */
+async function readChart(token, m, rep) {
+  const log = [];
+  try {
+    const { list, info } = await graph.chartImageCandidates(token, m);
+    log.push(...info);
+    if (!list.length) log.push('Kein passendes Diagramm-Bild gefunden.');
+    for (const c of list.slice(0, 4)) {
+      try {
+        const blob = await c.load();
+        let best = null;
+        for await (const ocr of ocrImage(blob)) {
+          const res = parseChartWords(ocr.words, { from: rep.weekStart, to: rep.weekEnd }, rep.total);
+          log.push(`Texterkennung ${c.label}: ${res.found} Tage, Summe ${res.sum} / ${res.total} Min. → ${res.ok ? 'OK' : 'verworfen'}\n${ocr.text.slice(0, 600)}`);
+          const diff = rep.total != null ? Math.abs(res.sum - rep.total) : 0;
+          if (res.ok && (!best || diff < best.diff)) best = { res, diff };
+          if (best && best.diff === 0) break; // Summe stimmt exakt
+        }
+        if (best) {
+          rep.days = best.res.days;
+          rep.kind = 'daily';
+          rep.ocr = true;
+          break;
+        }
+      } catch (e) {
+        log.push(`Bild ${c.label}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    log.push(`Fehler: ${e.message}`);
+  }
+  return log.join('\n');
 }
 
 function renderStatus() {
