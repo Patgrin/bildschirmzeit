@@ -7,7 +7,7 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 const FIRST_SYNC_FROM = '2025-10-01T00:00:00Z';
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -225,7 +225,7 @@ function renderStats() {
     ['Wochenende', st.wochenende != null ? fmtHM(st.wochenende) + ' h' : '–', 'Ø Sa/So außerhalb Ferien'],
   ];
   $('#tiles').innerHTML = tiles.map(([l, v, s]) => `<div class="tile"><span class="tl">${l}</span><span class="tv">${v}</span><span class="ts">${s}</span></div>`).join('');
-  renderChart($('#chart'), $('#tip'), st);
+  renderChart($('#chart'), $('#tip'), st, cfg().customFree || []);
   $('#monthTable tbody').innerHTML = st.monthRows.map((r) => `<tr><td>${r.label}</td><td>${fmtHM(r.avg)}</td><td>${r.schule != null ? fmtHM(r.schule) : '–'}</td><td>${r.ferien != null ? fmtHM(r.ferien) : '–'}</td><td>${r.n}</td></tr>`).join('');
 }
 
@@ -357,7 +357,9 @@ async function init() {
   $('#timeline').onclick = (e) => { const li = e.target.closest('.day'); if (li) editDay(li.dataset.day); };
   $('#syncBtn').onclick = () => sync();
   bindSettings();
-  window.addEventListener('resize', () => { if (!$('#view-chart').hidden) renderStats(); });
+  let lastW = innerWidth;
+  // iOS meldet beim Scrollen 'resize' (Höhe ändert sich) – nur bei geänderter Breite neu zeichnen
+  window.addEventListener('resize', () => { if (innerWidth !== lastW) { lastW = innerWidth; if (!$('#view-chart').hidden) renderStats(); } });
 
   try {
     if (await auth.handleRedirect(cfg())) toast('Mit Microsoft verbunden', 'ok');

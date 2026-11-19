@@ -1,14 +1,16 @@
-// Wochen-Diagramm: Ø Bildschirmzeit pro Tag je Woche seit November 2025, mit Trendlinie.
+// Verlauf: Ø Bildschirmzeit pro Tag (Wochenmittel) über die gesamte Historie.
+// Die Zeit über dem November-2025-Niveau ist transparent orange hervorgehoben,
+// Ferienzeiten liegen als graue Bänder im Hintergrund.
 
-import { addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, MONTHS, MONTHS_LONG, escapeHtml, weekdayIndex } from './util.js';
-import { holidayFor } from './holidays.js';
+import { addDays, mondayOf, daysBetween, fmtDate, fmtMin, fmtHM, isoWeek, MONTHS, MONTHS_LONG, escapeHtml, weekdayIndex } from './util.js';
+import { holidayFor, holidaysOO } from './holidays.js';
 
-export const CHART_START = '2025-11-01';
+export const BASE_FROM = '2025-11-01';
+export const BASE_TO = '2025-11-30';
 
 export function weeklySeries(days, customFree) {
   const weeks = new Map();
   for (const [d, v] of Object.entries(days)) {
-    if (d < CHART_START) continue;
     const w = mondayOf(d);
     if (!weeks.has(w)) weeks.set(w, { start: w, sum: 0, n: 0, estimated: false });
     const o = weeks.get(w);
@@ -39,33 +41,29 @@ function regression(ys) {
   return { slope, at: (x) => my + slope * (x - mx) };
 }
 
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+
 export function stats(days, customFree) {
   const weeks = weeklySeries(days, customFree);
-  const novDays = Object.entries(days).filter(([d]) => d >= '2025-11-01' && d <= '2025-11-30').map(([, v]) => v.min);
-  const nov = novDays.length ? novDays.reduce((a, b) => a + b, 0) / novDays.length : null;
+  const nov = mean(Object.entries(days).filter(([d]) => d >= BASE_FROM && d <= BASE_TO).map(([, v]) => v.min));
   const last = weeks.slice(-4);
   const recent = last.length ? last.reduce((a, w) => a + w.sum, 0) / last.reduce((a, w) => a + w.n, 0) : null;
   const reg = regression(weeks.map((w) => w.avg));
 
   // Schultage vs. Ferien vs. Wochenende
   const cat = { schule: [], ferien: [], wochenende: [] };
-  for (const [d, v] of Object.entries(days)) {
-    if (d < CHART_START) continue;
-    if (holidayFor(d, customFree)) cat.ferien.push(v.min);
-    else if (weekdayIndex(d) >= 5) cat.wochenende.push(v.min);
-    else cat.schule.push(v.min);
-  }
-  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-
-  // Monate
   const months = new Map();
   for (const [d, v] of Object.entries(days)) {
-    if (d < CHART_START) continue;
+    const hol = holidayFor(d, customFree);
+    if (hol) cat.ferien.push(v.min);
+    else if (weekdayIndex(d) >= 5) cat.wochenende.push(v.min);
+    else cat.schule.push(v.min);
+
     const k = d.slice(0, 7);
     if (!months.has(k)) months.set(k, { k, all: [], schule: [], ferien: [] });
     const o = months.get(k);
     o.all.push(v.min);
-    if (holidayFor(d, customFree)) o.ferien.push(v.min);
+    if (hol) o.ferien.push(v.min);
     else if (weekdayIndex(d) < 5) o.schule.push(v.min);
   }
   const monthRows = [...months.values()].sort((a, b) => (a.k < b.k ? -1 : 1)).map((o) => ({
@@ -82,79 +80,108 @@ export function stats(days, customFree) {
   };
 }
 
-export function renderChart(el, tip, st) {
+const signed = (min) => `${min >= 0 ? '+' : '−'}${fmtHM(Math.abs(min))} h`;
+
+export function renderChart(el, tip, st, customFree = []) {
   const weeks = st.weeks;
+  tip.hidden = true;
   if (!weeks.length) {
-    el.innerHTML = '<p class="muted center">Noch keine Daten ab November 2025.</p>';
+    el.innerHTML = '<p class="muted center">Noch keine Daten.</p>';
     return;
   }
-  const W = Math.max(300, el.clientWidth), Hh = 230;
-  const m = { l: 36, r: 8, t: 12, b: 26 };
+  const W = Math.max(300, el.clientWidth), Hh = 250;
+  const m = { l: 36, r: 10, t: 14, b: 28 };
   const iw = W - m.l - m.r, ih = Hh - m.t - m.b;
-  const maxMin = Math.max(60, ...weeks.map((w) => w.avg));
-  const maxH = Math.ceil(maxMin / 60);
+
+  // Zeitachse: vom Montag der ersten bis zum Sonntag der letzten Woche
+  const t0 = weeks[0].start, t1 = addDays(weeks[weeks.length - 1].start, 7);
+  const span = Math.max(7, daysBetween(t0, t1));
+  const xd = (d) => m.l + (daysBetween(t0, d) / span) * iw;
+  const xw = (w) => xd(addDays(w.start, 3.5 | 0)) + (0.5 / span) * iw; // Wochenmitte
+
+  const maxMin = Math.max(60, st.nov || 0, ...weeks.map((w) => w.avg));
+  const maxH = Math.ceil((maxMin * 1.08) / 60);
   const stepH = maxH > 8 ? 2 : 1;
   const top = Math.ceil(maxH / stepH) * stepH * 60;
   const y = (min) => m.t + ih - (min / top) * ih;
-  const step = iw / weeks.length;
-  const bw = Math.max(3, Math.min(28, step - 2));
-  const x = (i) => m.l + i * step + (step - bw) / 2;
 
-  let svg = `<svg viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}" role="img" aria-label="Durchschnittliche Bildschirmzeit pro Tag je Woche seit November 2025">`;
-  // Gitter + Achse
+  let svg = `<svg viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}" role="img" aria-label="Durchschnittliche Bildschirmzeit pro Tag über die gesamte Historie">`;
+
+  // Ferien als Hintergrundbänder (nur mehrtägige Ferien)
+  const bands = [...holidaysOO(+t0.slice(0, 4), +t1.slice(0, 4)), ...customFree].filter((h) => daysBetween(h.from, h.to) >= 2 && h.to >= t0 && h.from <= t1);
+  for (const h of bands) {
+    const a = xd(h.from < t0 ? t0 : h.from), b = xd(addDays(h.to > t1 ? t1 : h.to, 1));
+    svg += `<rect class="band" x="${a}" y="${m.t}" width="${Math.max(1, b - a)}" height="${ih}"><title>${escapeHtml(h.name)}</title></rect>`;
+  }
+
+  // Raster
   for (let h = 0; h <= top / 60; h += stepH) {
     const yy = y(h * 60);
     svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" class="grid"/>`;
     svg += `<text x="${m.l - 6}" y="${yy + 4}" class="axis" text-anchor="end">${h} h</text>`;
   }
-  // Monatsbeschriftung
-  let lastMonth = -1, lastX = -99;
-  weeks.forEach((w, i) => {
-    const th = addDays(w.start, 3); // Donnerstag bestimmt den Monat der Woche
-    const mth = +th.slice(5, 7);
-    if (mth !== lastMonth) {
-      lastMonth = mth;
-      if (x(i) - lastX < 34) return; // Beschriftungen nicht überlappen lassen
-      lastX = x(i);
-      svg += `<text x="${x(i)}" y="${Hh - 8}" class="axis">${MONTHS[mth - 1]}</text>`;
+
+  // Monatsbeschriftung am Monatsersten
+  let lastX = -99;
+  for (let d = `${t0.slice(0, 7)}-01`; d <= t1; ) {
+    const xx = xd(d);
+    if (d >= t0 && xx - lastX >= 38) {
+      const mo = +d.slice(5, 7);
+      const label = mo === 1 || lastX < 0 ? `${MONTHS[mo - 1]} ${d.slice(2, 4)}` : MONTHS[mo - 1];
+      svg += `<line x1="${xx}" x2="${xx}" y1="${m.t + ih}" y2="${m.t + ih + 4}" class="tick"/>`;
+      svg += `<text x="${xx}" y="${Hh - 8}" class="axis">${label}</text>`;
+      lastX = xx;
     }
-  });
-  // Balken (oben gerundet)
-  weeks.forEach((w, i) => {
-    const x0 = x(i), y0 = y(w.avg), yb = y(0), r = Math.min(4, bw / 2, yb - y0);
-    const cls = w.holiday ? 'bar holiday' : 'bar';
-    svg += `<path class="${cls}${w.estimated ? ' est' : ''}" d="M${x0},${yb} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} H${x0 + bw - r} Q${x0 + bw},${y0} ${x0 + bw},${y0 + r} V${yb} Z"/>`;
-  });
-  // Trendlinie
-  const reg = regression(weeks.map((w) => w.avg));
-  if (reg && weeks.length >= 3) {
-    const cx = (i) => m.l + i * step + step / 2;
-    svg += `<line class="trend" x1="${cx(0)}" y1="${y(Math.max(0, reg.at(0)))}" x2="${cx(weeks.length - 1)}" y2="${y(Math.max(0, reg.at(weeks.length - 1)))}"/>`;
+    const [yy, mm] = d.split('-').map(Number);
+    d = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`;
   }
-  // Treffer-Flächen für Tooltip
-  weeks.forEach((w, i) => {
-    svg += `<rect class="hit" data-i="${i}" x="${m.l + i * step}" y="${m.t}" width="${step}" height="${ih}"/>`;
-  });
+
+  // Linie + Flächen
+  const pts = weeks.map((w) => [xw(w), y(w.avg)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  const first = pts[0][0], last = pts[pts.length - 1][0];
+  svg += `<path class="area" d="${line} L${last},${y(0)} L${first},${y(0)} Z"/>`;
+
+  if (st.nov != null) {
+    const yb = y(st.nov);
+    // Mehr-Zeit gegenüber November 2025: Fläche zwischen Linie und Basislinie, nur oberhalb sichtbar
+    svg += `<clipPath id="above"><rect x="0" y="0" width="${W}" height="${yb}"/></clipPath>`;
+    svg += `<path class="excess" clip-path="url(#above)" d="${line} L${last},${yb} L${first},${yb} Z"/>`;
+    svg += `<line class="base" x1="${m.l}" x2="${W - m.r}" y1="${yb}" y2="${yb}"/>`;
+    svg += `<text class="base-label" text-anchor="end" x="${W - m.r - 4}" y="${Math.min(yb + 15, m.t + ih - 4)}">Ø Nov. 2025: ${fmtHM(st.nov)} h</text>`;
+  }
+  svg += `<path class="line" d="${line}"/>`;
+  pts.forEach((p, i) => (svg += `<circle class="dot${weeks[i].estimated ? ' est' : ''}" cx="${p[0]}" cy="${p[1]}" r="${weeks.length > 40 ? 2.5 : 3.5}"/>`));
+  svg += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" visibility="hidden"/>`;
+  svg += `<circle class="focus" r="5.5" cx="-10" cy="-10"/>`;
+  svg += `<rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}"/>`;
   svg += '</svg>';
   el.innerHTML = svg;
 
+  const svgEl = el.querySelector('svg');
+  const cross = el.querySelector('.cross'), focus = el.querySelector('.focus');
+  const hide = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); focus.setAttribute('cx', -10); };
   const show = (ev) => {
-    const t = ev.target.closest('.hit');
-    el.querySelectorAll('.bar.active').forEach((b) => b.classList.remove('active'));
-    if (!t) { tip.hidden = true; return; }
-    const i = +t.dataset.i, w = weeks[i];
-    el.querySelectorAll('.bar')[i].classList.add('active');
+    const box = svgEl.getBoundingClientRect();
+    const px = ((ev.clientX - box.left) / box.width) * W;
+    if (px < m.l - 10 || px > W - m.r + 10) { hide(); return; }
+    let i = 0;
+    pts.forEach((p, k) => { if (Math.abs(p[0] - px) < Math.abs(pts[i][0] - px)) i = k; });
+    const w = weeks[i], [cx, cy] = pts[i];
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    focus.setAttribute('cx', cx); focus.setAttribute('cy', cy);
+    const diff = st.nov != null ? w.avg - st.nov : null;
     tip.innerHTML = `<strong>KW ${isoWeek(w.start)} · ${fmtDate(w.start)} – ${fmtDate(addDays(w.start, 6), true)}</strong>
       <div>Ø ${fmtMin(w.avg)} pro Tag</div>
-      <div class="muted">Summe ${fmtHM(w.sum)} h · ${w.n} Tage${w.estimated ? ' · geschätzt' : ''}</div>
+      ${diff != null ? `<div>${signed(diff)} ggü. Nov. 2025 (${diff >= 0 ? '+' : '−'}${Math.abs(Math.round((diff / st.nov) * 100))} %)</div>` : ''}
+      <div class="muted">Woche gesamt ${fmtHM(w.sum)} h · ${w.n} Tage${w.estimated ? ' · teils geschätzt' : ''}</div>
       ${w.holiday ? `<div class="muted">${escapeHtml(w.holiday)}</div>` : ''}`;
     tip.hidden = false;
-    const box = el.getBoundingClientRect();
-    const bx = (m.l + i * step + step / 2) / W * box.width;
-    tip.style.left = `${Math.min(Math.max(bx - tip.offsetWidth / 2, 0), box.width - tip.offsetWidth)}px`;
-    tip.style.top = `${Math.max(0, y(w.avg) / Hh * box.height - tip.offsetHeight - 10)}px`;
+    const sx = (cx / W) * box.width, sy = (cy / Hh) * box.height;
+    tip.style.left = `${Math.min(Math.max(sx - tip.offsetWidth / 2, 0), box.width - tip.offsetWidth)}px`;
+    tip.style.top = `${sy - tip.offsetHeight - 14 < 0 ? sy + 14 : sy - tip.offsetHeight - 14}px`;
   };
   el.onpointermove = show;
   el.onpointerdown = show;
-  el.onpointerleave = (e) => { if (e.pointerType === 'mouse') { tip.hidden = true; el.querySelectorAll('.bar.active').forEach((b) => b.classList.remove('active')); } };
+  el.onpointerleave = (e) => { if (e.pointerType === 'mouse') hide(); };
 }
