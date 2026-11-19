@@ -113,6 +113,12 @@ function b64ToBlob(b64, type) {
   return new Blob([arr], { type });
 }
 
+/** Alle Bild-URLs einer HTML-Mail (vollständig) */
+export function imageUrls(html) {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return [...doc.querySelectorAll('img')].map((i) => i.getAttribute('src') || '').filter(Boolean);
+}
+
 /** HTML-Mailtext in lesbaren Text umwandeln (Tabellenzellen getrennt, Zeilen erhalten) */
 export function htmlToText(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');

@@ -3,11 +3,12 @@ import * as auth from './auth.js';
 import * as graph from './graph.js';
 import { parseReport } from './parser.js';
 import { ocrImage, parseChartWords } from './chartocr.js';
+import { daysFromChartUrls } from './chartdata.js';
 import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.6.1';
+export const APP_VERSION = '1.7.0';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -106,6 +107,20 @@ async function sync({ silent = false } = {}) {
 /** Versucht die Tageswerte aus dem Diagramm-Bild zu lesen; ergänzt rep bei Erfolg. Liefert Diagnosetext. */
 async function readChart(token, m, rep) {
   const log = [];
+  // 1) Tageswerte direkt aus der Diagramm-URL lesen (zuverlässig, ohne Bild zu laden)
+  try {
+    const r = daysFromChartUrls(graph.imageUrls(m.body?.content), { from: rep.weekStart, to: rep.weekEnd }, rep.total);
+    log.push(...r.info);
+    if (r.days) {
+      rep.days = r.days;
+      rep.kind = 'daily';
+      log.push('Tageswerte aus Diagramm-URL übernommen.');
+      return log.join('\n');
+    }
+  } catch (e) {
+    log.push(`URL-Auswertung: ${e.message}`);
+  }
+  // 2) Fallback: Bild laden und per Texterkennung lesen
   try {
     const { list, info } = await graph.chartImageCandidates(token, m);
     log.push(...info);
