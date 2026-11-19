@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bildschirmzeit</title>
+  <meta name="description" content="Wöchentliche Bildschirmzeit aus Microsoft-Family-Safety-Berichten">
+  <meta name="theme-color" content="#2a78d6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Bildschirmzeit">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Bildschirmzeit</h1>
+    <button id="syncBtn" class="icon" aria-label="Jetzt mit Outlook abgleichen" title="Jetzt abgleichen">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+  <p id="status" class="status muted"></p>
+
+  <main>
+    <section id="view-timeline" class="view">
+      <div class="legend-row muted">
+        <span><i class="sw sw-school"></i>Schultag</span>
+        <span><i class="sw sw-hol"></i>Ferien / schulfrei (OÖ)</span>
+        <span>≈ geschätzt · ✎ manuell</span>
+      </div>
+      <div id="timeline"></div>
+      <p class="muted small center">Tippe auf einen Tag, um den Wert zu korrigieren.</p>
+    </section>
+
+    <section id="view-chart" class="view" hidden>
+      <div id="tiles" class="tiles"></div>
+      <div class="card">
+        <h2>Ø pro Tag je Woche seit November 2025</h2>
+        <div class="legend-row muted">
+          <span><i class="sw sw-school"></i>Schulwoche</span>
+          <span><i class="sw sw-hol"></i>Ferienwoche</span>
+          <span><i class="sw sw-trend"></i>Trend</span>
+        </div>
+        <div class="chart-wrap">
+          <div id="chart"></div>
+          <div id="tip" class="tip" hidden></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Monatsübersicht (Ø pro Tag, h:mm)</h2>
+        <table id="monthTable">
+          <thead><tr><th>Monat</th><th>Alle</th><th>Schultag</th><th>Ferien</th><th>Tage</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view" hidden>
+      <div class="card">
+        <h2>1 · Microsoft-Verbindung</h2>
+        <label>Anwendungs-ID (Client-ID) aus der App-Registrierung
+          <input id="clientId" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+        </label>
+        <label>Kontotyp
+          <select id="tenant">
+            <option value="consumers">Privates Microsoft-Konto (outlook.de, hotmail …)</option>
+            <option value="common">Beliebig (privat oder Firma/Schule)</option>
+          </select>
+        </label>
+        <p class="small muted">Umleitungs-URI für die Registrierung: <code id="redirectUri"></code></p>
+        <p>Status: <strong id="loginState"></strong></p>
+        <button id="btnLogin" class="primary"></button>
+      </div>
+
+      <div class="card">
+        <h2>2 · Outlook-Ordner</h2>
+        <p>Gewählt: <strong id="folderName"></strong></p>
+        <button id="btnFolders">Ordner auswählen</button>
+        <select id="folderSelect" hidden></select>
+        <label>Name des Kindes (optional, filtert Berichte anderer Familienmitglieder)
+          <input id="childName" placeholder="z. B. Max">
+        </label>
+        <button id="btnSync" class="primary">Jetzt abgleichen</button>
+      </div>
+
+      <div class="card">
+        <h2>3 · Schulautonome Tage</h2>
+        <p class="small muted">Gesetzliche Ferien und Feiertage für Oberösterreich sind bereits hinterlegt. Hier zusätzliche freie Tage der Schule eintragen.</p>
+        <ul id="customList" class="plain"></ul>
+        <div class="row">
+          <input type="date" id="freeFrom" aria-label="von">
+          <input type="date" id="freeTo" aria-label="bis">
+        </div>
+        <input id="freeName" placeholder="Bezeichnung (optional)">
+        <button id="btnAddFree">Hinzufügen</button>
+      </div>
+
+      <div class="card">
+        <h2>Verarbeitete E-Mails (<span id="mailCount">0</span>)</h2>
+        <p class="small muted">Jede Mail wird nur einmal übernommen; Kopien und doppelte Tage werden ignoriert.</p>
+        <ul id="mailLog" class="plain log"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Daten</h2>
+        <div class="row">
+          <button id="btnExport">Sicherung exportieren</button>
+          <label class="button">Sicherung importieren<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+        </div>
+        <button id="btnRebuild" class="danger">Neu aus Outlook einlesen</button>
+      </div>
+
+      <div class="card">
+        <h2>Erkennung testen</h2>
+        <p class="small muted">Text einer Bericht-Mail einfügen, um zu prüfen, was erkannt wird.</p>
+        <textarea id="testText" rows="5"></textarea>
+        <button id="btnTest">Testen</button>
+        <pre id="testOut" class="small"></pre>
+      </div>
+      <p class="muted small center">Version <span id="version"></span> · Ferienangaben ohne Gewähr</p>
+    </section>
+  </main>
+
+  <nav>
+    <button data-tab="timeline" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>Timeline</button>
+    <button data-tab="chart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M10 20V8M15 20v-6M20 20V4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>Verlauf</button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Einstellungen</button>
+  </nav>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
