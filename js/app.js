@@ -1,4 +1,4 @@
-import { db, save, ingest, msgKey, setManual, resetMailData, exportJson, importJson } from './store.js';
+import { db, save, ingest, msgKey, retryIfOutdated, PARSER_VERSION, setManual, resetMailData, exportJson, importJson } from './store.js';
 import * as auth from './auth.js';
 import * as graph from './graph.js';
 import { parseReport } from './parser.js';
@@ -7,7 +7,7 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart } from './chart.js';
 import { ymd, addDays, mondayOf, fmtDate, fmtMin, fmtHM, isoWeek, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 const FIRST_SYNC_FROM = '2025-10-01T00:00:00Z';
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -50,18 +50,20 @@ async function sync({ silent = false } = {}) {
   setStatus('Prüfe Outlook auf neue Berichte …');
   try {
     // Überlappend ab 14 Tage vor der letzten Mail abfragen – Duplikate werden ohnehin erkannt
-    const since = db.lastReceived ? new Date(new Date(db.lastReceived).getTime() - 14 * 86400000).toISOString() : FIRST_SYNC_FROM;
+    // Nach einer verbesserten Erkennung alle Mails erneut durchsehen, sonst nur die letzten Wochen
+    const since = db.lastReceived && db.parserVersion === PARSER_VERSION ? new Date(new Date(db.lastReceived).getTime() - 14 * 86400000).toISOString() : FIRST_SYNC_FROM;
     const msgs = await graph.listMessages(token, cfg().folderId, since);
-    let neu = 0, dup = 0, unk = 0, other = 0;
+    let neu = 0, dup = 0, unk = 0, other = 0, retried = 0;
     const child = (cfg().childName || '').trim().toLowerCase();
     for (const m of msgs) {
       const key = msgKey(m);
       if (!key) continue;
+      if (retryIfOutdated(key)) retried++;
       if (db.processed[key]) { dup++; continue; }
       const text = m.body?.contentType === 'html' ? graph.htmlToText(m.body.content) : m.body?.content || '';
       const full = `${m.subject}\n${text}`;
       if (child && !full.toLowerCase().includes(child)) {
-        db.processed[key] = { subject: m.subject, received: m.receivedDateTime, status: 'anderes Familienmitglied' };
+        db.processed[key] = { subject: m.subject, received: m.receivedDateTime, status: 'anderes Familienmitglied', pv: PARSER_VERSION };
         other++;
         continue;
       }
@@ -79,6 +81,9 @@ async function sync({ silent = false } = {}) {
       if (!db.lastReceived || m.receivedDateTime > db.lastReceived) db.lastReceived = m.receivedDateTime;
     }
     db.lastSync = new Date().toISOString();
+    db.appVersion = APP_VERSION;
+    db.parserVersion = PARSER_VERSION;
+    db.lastResult = { at: db.lastSync, found: msgs.length, neu, dup, unk, other };
     save();
     render();
     const parts = [`${neu} neue Berichte`];
@@ -138,7 +143,7 @@ function renderStatus() {
 }
 
 function maybeAutoSync() {
-  const due = !db.lastSync || Date.now() - new Date(db.lastSync).getTime() > AUTO_SYNC_MIN * 60000;
+  const due = !db.lastSync || db.appVersion !== APP_VERSION || Date.now() - new Date(db.lastSync).getTime() > AUTO_SYNC_MIN * 60000;
   if (due && cfg().clientId && (auth.hasSession() || auth.hadSession())) sync({ silent: true });
 }
 
@@ -147,7 +152,13 @@ function renderTimeline() {
   const el = $('#timeline');
   const keys = Object.keys(db.days).sort();
   if (!keys.length) {
-    el.innerHTML = `<div class="empty"><p>Noch keine Einträge.</p><p class="muted">Verbinde Outlook in den Einstellungen – die Wochenberichte werden dann automatisch eingetragen.</p></div>`;
+    const r = db.lastResult;
+    const hint = !cfg().folderId || !auth.hadSession()
+      ? 'Verbinde Outlook in den Einstellungen – die Wochenberichte werden dann automatisch eingetragen.'
+      : !r
+        ? 'Outlook ist verbunden. Der erste Abgleich läuft gleich bzw. über ↻ oben rechts.'
+        : `Outlook ist verbunden (Ordner „${escapeHtml(cfg().folderName)}“). Beim letzten Abgleich: ${r.found} Mails gefunden, ${r.neu} übernommen, ${r.unk} nicht erkannt${r.other ? `, ${r.other} wegen Namensfilter übersprungen` : ''}. Details unter Einstellungen → Verarbeitete E-Mails.`;
+    el.innerHTML = `<div class="empty"><p>Noch keine Einträge.</p><p class="muted">${hint}</p></div>`;
     return;
   }
   const first = mondayOf(keys[0]);

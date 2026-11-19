@@ -10,6 +10,19 @@ import { hash } from './util.js';
 
 const KEY = 'bz.data.v1';
 const PRIO = { estimate: 1, mail: 2, manual: 3 };
+// Bei Verbesserungen der Erkennung erhöhen: Nicht (vollständig) erkannte Mails werden dann automatisch neu gelesen
+export const PARSER_VERSION = 2;
+const RETRY = ['nicht erkannt', 'nur Summe', 'anderes Familienmitglied'];
+
+/** Mail wurde mit älterer Erkennung nicht vollständig gelesen → vergessen, damit sie neu verarbeitet wird */
+export function retryIfOutdated(key) {
+  const p = db.processed[key];
+  if (!p || (p.pv || 1) >= PARSER_VERSION || !RETRY.includes(p.status)) return false;
+  if (p.h && db.hashes[p.h] === key) delete db.hashes[p.h];
+  delete db.processed[key];
+  delete db.rawSamples[key];
+  return true;
+}
 
 const empty = () => ({
   settings: { clientId: '', tenant: 'consumers', folderId: '', folderName: '', childName: '', customFree: [] },
@@ -46,7 +59,7 @@ export function msgKey(m) {
 export function ingest(key, meta, report, rawText) {
   if (db.processed[key]) return { status: 'duplikat', changed: 0 };
 
-  const base = { subject: meta.subject, received: meta.received, weekStart: report.weekStart, weekEnd: report.weekEnd, kind: report.kind };
+  const base = { subject: meta.subject, received: meta.received, weekStart: report.weekStart, weekEnd: report.weekEnd, kind: report.kind, pv: PARSER_VERSION };
 
   if (report.kind === 'none') {
     db.processed[key] = { ...base, status: 'nicht erkannt' };
@@ -71,7 +84,7 @@ export function ingest(key, meta, report, rawText) {
       changed++;
     }
   }
-  db.processed[key] = { ...base, status: report.kind === 'daily' ? 'übernommen' : 'nur Summe', changed, ocr: !!report.ocr };
+  db.processed[key] = { ...base, status: report.kind === 'daily' ? 'übernommen' : 'nur Summe', changed, ocr: !!report.ocr, h };
   return { status: 'neu', changed };
 }
 
