@@ -218,7 +218,7 @@ function renderTimeline() {
       const tag = v?.src === 'manual' ? '<span class="tag" title="Manuell eingetragen">✎</span>' : '';
       html += `<li class="day${hol ? ' is-hol' : ''}${we ? ' is-we' : ''}" data-day="${d}">
         <span class="dname">${WD_SHORT[weekdayIndex(d)]}<small>${fmtDate(d)}</small></span>
-        <span class="track"><span class="fill${hol ? ' hol' : ''}" style="width:${pct}%"></span>${schoolPct ? `<span class="seg school" style="width:${schoolPct}%"></span>` : ''}${sleepPct ? `<span class="seg sleep" style="width:${sleepPct}%"></span>` : ''}</span>
+        <span class="track"><span class="fill" style="width:${pct}%"></span>${schoolPct ? `<span class="seg school" style="width:${schoolPct}%"></span>` : ''}${sleepPct ? `<span class="seg sleep" style="width:${sleepPct}%"></span>` : ''}</span>
         <span class="val">${v ? fmtHM(v.min) : '–'}${tag}</span>
       </li>`;
     }
