@@ -8,7 +8,7 @@ import { holidayFor } from './holidays.js';
 import { stats, renderChart, resetZoom } from './chart.js';
 import { ymd, addDays, weekStartOf, fmtWeek, fmtDate, fmtMin, fmtHM, WD_SHORT, escapeHtml, parseUserDuration, weekdayIndex } from './util.js';
 
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.9.0';
 const FIRST_SYNC_FROM = null; // null = alle Mails im Ordner, egal wie alt
 const AUTO_SYNC_MIN = 20; // Minuten zwischen automatischen Abgleichen
 
@@ -164,6 +164,10 @@ function maybeAutoSync() {
 }
 
 // ---------- Timeline ----------
+const DAY_MIN = 24 * 60;
+const SCHOOL_MIN = 8 * 60;
+const SLEEP_MIN = 10 * 60;
+
 function renderTimeline() {
   const el = $('#timeline');
   const keys = Object.keys(db.days).sort();
@@ -184,7 +188,6 @@ function renderTimeline() {
   const lastKey = keys.length && keys[keys.length - 1] > ymd(new Date()) ? keys[keys.length - 1] : ymd(new Date());
   const last = weekStartOf(lastKey);
   const custom = cfg().customFree;
-  const maxMin = Math.max(240, ...keys.map((k) => db.days[k].min));
 
   let html = '';
   for (let w = last; w >= first; w = addDays(w, -7)) {
@@ -208,11 +211,14 @@ function renderTimeline() {
       const v = db.days[d];
       const hol = holidayFor(d, custom);
       const we = weekdayIndex(d) >= 5;
-      const pct = v && v.min > 0 ? Math.max(1.5, (v.min / maxMin) * 100) : 0;
+      // Balken = 24 h: Bildschirmzeit + Schule + Schlaf (je Mo–Fr, nicht in Ferien/an Feiertagen)
+      const pct = v && v.min > 0 ? Math.max(1, (v.min / DAY_MIN) * 100) : 0;
+      const schoolPct = !we && !hol ? (SCHOOL_MIN / DAY_MIN) * 100 : 0;
+      const sleepPct = !we && !hol ? (SLEEP_MIN / DAY_MIN) * 100 : 0;
       const tag = v?.src === 'manual' ? '<span class="tag" title="Manuell eingetragen">✎</span>' : '';
       html += `<li class="day${hol ? ' is-hol' : ''}${we ? ' is-we' : ''}" data-day="${d}">
         <span class="dname">${WD_SHORT[weekdayIndex(d)]}<small>${fmtDate(d)}</small></span>
-        <span class="track"><span class="fill${hol ? ' hol' : ''}" style="width:${pct}%"></span></span>
+        <span class="track"><span class="fill${hol ? ' hol' : ''}" style="width:${pct}%"></span>${schoolPct ? `<span class="seg school" style="width:${schoolPct}%"></span>` : ''}${sleepPct ? `<span class="seg sleep" style="width:${sleepPct}%"></span>` : ''}</span>
         <span class="val">${v ? fmtHM(v.min) : '–'}${tag}</span>
       </li>`;
     }

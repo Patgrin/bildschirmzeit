@@ -10,6 +10,8 @@
   --school: #2a78d6;   /* Serie 1 */
   --hol: #eb6834;      /* Serie 2 */
   --track: #ecebe7;
+  --unterricht: #e3b400;
+  --sleep: #2f9e5a;
   --ok: #0a7d3b;
   --err: #c62f2f;
   --accent: #2a78d6;
@@ -28,6 +30,8 @@
     --school: #3987e5;
     --hol: #d95926;
     --track: #262624;
+    --unterricht: #d9ad1a;
+    --sleep: #3fae6a;
     --ok: #3fbf72;
     --err: #ff6b6b;
     --accent: #3987e5;
@@ -37,7 +41,7 @@
   color-scheme: dark;
   --bg: #111110; --surface: #1a1a19; --line: #2c2c2a; --grid: #2a2a28;
   --text: #f0efec; --text-2: #c3c2b7; --muted: #8d8c85;
-  --school: #3987e5; --hol: #d95926; --track: #262624; --ok: #3fbf72; --err: #ff6b6b; --accent: #3987e5;
+  --school: #3987e5; --hol: #d95926; --track: #262624; --unterricht: #d9ad1a; --sleep: #3fae6a; --ok: #3fbf72; --err: #ff6b6b; --accent: #3987e5;
 }
 
 * { box-sizing: border-box; }
@@ -89,6 +93,8 @@ label { display: block; font-size: 14px; color: var(--text-2); }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .sw-school { background: var(--school); }
 .sw-hol { background: var(--hol); }
+.sw-unterricht { background: var(--unterricht); }
+.sw-sleep { background: var(--sleep); }
 
 /* Timeline */
 .week { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 6px; margin-bottom: 12px; }
@@ -103,8 +109,11 @@ label { display: block; font-size: 14px; color: var(--text-2); }
 .dname { font-weight: 600; font-size: 15px; line-height: 1.1; }
 .dname small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
 .is-we .dname { color: var(--text-2); }
-.track { height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; }
-.fill { display: block; height: 100%; background: var(--school); border-radius: 0 5px 5px 0; }
+.track { display: flex; height: 12px; background: var(--track); border-radius: 6px; overflow: hidden; }
+.fill { display: block; flex: none; height: 100%; background: var(--school); }
+.seg { display: block; flex: none; height: 100%; }
+.seg.school { background: var(--unterricht); }
+.seg.sleep { background: var(--sleep); }
 .fill.hol { background: var(--hol); }
 .fill.est { opacity: .55; }
 .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; }
